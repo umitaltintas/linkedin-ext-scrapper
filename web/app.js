@@ -1,163 +1,235 @@
-const form = document.getElementById('scrape-form');
-const statusEl = document.getElementById('status');
-const resultSection = document.getElementById('result');
-const resultPre = document.getElementById('resultPre');
-const extensionIdInput = document.getElementById('extensionId');
-const extensionIdHint = document.getElementById('extensionIdHint');
-const profileUrlInput = document.getElementById('profileUrl');
-const debugPanel = document.getElementById('debug-panel');
-const debugList = document.getElementById('debugList');
-const sampleProfile = JSON.parse(document.getElementById('sample-json').innerHTML.trim());
+const { useState, useEffect, useRef } = React;
+const ReactJson = window.ReactJson || window.ReactJsonView;
+
 const DEFAULT_EXTENSION_ID = 'hnfkpaaphfmbhcaedaejaanfjcghppan';
-const canTalkToExtension = typeof chrome !== 'undefined' && !!chrome.runtime?.sendMessage;
-const queryParams = new URLSearchParams(window.location.search);
-const debugAlwaysOn = queryParams.get('debug') === '1';
+
+// Sample data
+const sampleProfile = JSON.parse(
+  document.getElementById('sample-json').innerHTML.trim()
+);
+
+const canTalkToExtension =
+  typeof chrome !== 'undefined' && !!chrome.runtime?.sendMessage;
 
 function updateExtensionIdHint(source) {
-  if (!extensionIdHint) return;
   const messages = {
     query: 'Extension ID URL parametresinden alındı.',
     storage: 'Extension ID daha önce kaydettiğiniz değerle dolduruldu.',
     default: `Extension ID otomatik olarak ${DEFAULT_EXTENSION_ID} değerine ayarlandı.`
   };
-  extensionIdHint.textContent = messages[source] || '';
+  return messages[source] || '';
 }
 
-(function hydrateExtensionInput() {
-  const fromQuery = queryParams.get('ext');
-  const fromStorage = localStorage.getItem('extensionId');
-  const resolved = fromQuery || fromStorage || DEFAULT_EXTENSION_ID;
-  extensionIdInput.value = resolved;
-  if (!fromQuery && !fromStorage) {
-    localStorage.setItem('extensionId', resolved);
-  }
-  const source = fromQuery ? 'query' : fromStorage ? 'storage' : 'default';
-  updateExtensionIdHint(source);
-})();
+function App() {
+  const [extensionId, setExtensionId] = useState(DEFAULT_EXTENSION_ID);
+  const [extensionIdHint, setExtensionIdHint] = useState('');
+  const [profileUrl, setProfileUrl] = useState('');
+  const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState('');
+  const [result, setResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const queryParams = useRef(new URLSearchParams(window.location.search));
 
-function setStatus(message, type) {
-  statusEl.textContent = message;
-  statusEl.className = type ? `status ${type}` : 'status';
-}
+  // Initialize extension ID from query or storage
+  useEffect(() => {
+    const fromQuery = queryParams.current.get('ext');
+    const fromStorage = localStorage.getItem('extensionId');
+    const resolved = fromQuery || fromStorage || DEFAULT_EXTENSION_ID;
 
-function renderResult(profile) {
-  resultPre.textContent = JSON.stringify(profile, null, 2);
-  resultSection.hidden = false;
-}
+    setExtensionId(resolved);
 
-function formatTimestamp(ts) {
-  if (!ts) return '';
-  try {
-    return new Date(ts).toLocaleTimeString();
-  } catch {
-    return ts;
-  }
-}
+    const source = fromQuery ? 'query' : fromStorage ? 'storage' : 'default';
+    setExtensionIdHint(updateExtensionIdHint(source));
 
-function renderDebug(logs = []) {
-  if (!logs.length && !debugAlwaysOn) {
-    debugPanel.hidden = true;
-    debugList.innerHTML = '';
-    return;
-  }
-
-  debugPanel.hidden = false;
-  debugList.innerHTML = '';
-
-  if (!logs.length) {
-    const empty = document.createElement('p');
-    empty.className = 'hint';
-    empty.textContent = 'Debug aktif ancak log gelmedi.';
-    debugList.appendChild(empty);
-    return;
-  }
-
-  logs.forEach((log) => {
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-
-    const metaRow = document.createElement('div');
-    metaRow.className = 'log-meta';
-
-    const step = document.createElement('span');
-    step.className = 'log-step';
-    step.textContent = log.step || 'unknown';
-
-    const time = document.createElement('time');
-    time.textContent = formatTimestamp(log.timestamp);
-
-    metaRow.append(step, time);
-    entry.appendChild(metaRow);
-
-    if (log.meta) {
-      const pre = document.createElement('pre');
-      const metaText =
-        typeof log.meta === 'string' ? log.meta : JSON.stringify(log.meta, null, 2);
-      pre.textContent = metaText;
-      entry.appendChild(pre);
+    if (!fromQuery && !fromStorage) {
+      localStorage.setItem('extensionId', resolved);
     }
 
-    debugList.appendChild(entry);
-  });
-}
+    if (!canTalkToExtension) {
+      setStatus(
+        'Uyarı: Bu sayfa extension ile konuşamıyor. Chrome üzerinde http://localhost altında deneyin.',
+        'error'
+      );
+    }
+  }, []);
 
-function sendScrapeRequest(extensionId, profileUrl) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      extensionId,
-      { action: 'scrapeProfile', url: profileUrl },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
+  function sendScrapeRequest(extId, profileUrlValue) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        extId,
+        { action: 'scrapeProfile', url: profileUrlValue },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve(response);
         }
-        resolve(response);
-      }
-    );
-  });
-}
-
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const extensionId = extensionIdInput.value.trim();
-  const profileUrl = profileUrlInput.value.trim();
-
-  if (!extensionId) {
-    setStatus('Lütfen extension ID alanını doldurun.', 'error');
-    return;
+      );
+    });
   }
 
-  localStorage.setItem('extensionId', extensionId);
-  setStatus('LinkedIn profili açılıyor...', '');
-  resultSection.hidden = true;
-  renderDebug([]);
+  async function handleSubmit(e) {
+    e.preventDefault();
 
-  let response;
-  try {
-    if (!canTalkToExtension) {
-      setStatus('Chrome dışındasınız veya eklentiye erişim yok. Mock veri gösteriliyor.', 'error');
-      renderResult(sampleProfile);
-      renderDebug([]);
+    const trimmedExtId = extensionId.trim();
+    const trimmedUrl = profileUrl.trim();
+
+    if (!trimmedExtId) {
+      setStatus('Lütfen extension ID alanını doldurun.');
+      setStatusType('error');
       return;
     }
 
-    response = await sendScrapeRequest(extensionId, profileUrl);
+    localStorage.setItem('extensionId', trimmedExtId);
+    setStatus('LinkedIn profili açılıyor...');
+    setStatusType('');
+    setResult(null);
+    setIsLoading(true);
 
-    if (response?.status === 'success') {
-      setStatus('Veri başarıyla geldi.', 'success');
-      renderResult(response.profile);
-      renderDebug(response.debug || []);
-    } else {
-      throw new Error(response?.reason || 'Bilinmeyen hata');
+    try {
+      if (!canTalkToExtension) {
+        setStatus(
+          'Chrome dışındasınız veya eklentiye erişim yok. Mock veri gösteriliyor.',
+          'error'
+        );
+        setStatusType('error');
+        setResult(sampleProfile);
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await sendScrapeRequest(trimmedExtId, trimmedUrl);
+
+      if (response?.status === 'success') {
+        setStatus('Veri başarıyla geldi.');
+        setStatusType('success');
+        setResult(response.profile);
+      } else {
+        throw new Error(response?.reason || 'Bilinmeyen hata');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus(error.message);
+      setStatusType('error');
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error(error);
-    setStatus(error.message, 'error');
-    renderDebug(response?.debug || []);
   }
-});
 
-if (!canTalkToExtension) {
-  setStatus('Uyarı: Bu sayfa extension ile konuşamıyor. Chrome üzerinde http://localhost altında deneyin.', 'error');
-  renderDebug([]);
+  return (
+    <div className="app-shell">
+      <header className="hero card">
+        <p className="eyebrow">LinkedIn Relay</p>
+        <h1>LinkedIn Profili Çekme</h1>
+        <p>
+          Chrome eklentisi ile konuşarak LinkedIn profilini otomatik açar ve
+          veriyi bu sayfada gösterir. Debug ekranı kaldırıldı; artık odak sadece
+          profile verisinde.
+        </p>
+        <div className="hero-meta">
+          <span className="pill">Canlı Demo</span>
+          <span className="pill pill-muted">Beta</span>
+        </div>
+      </header>
+
+      <main className="layout">
+        <section className="card form-card">
+          <form onSubmit={handleSubmit}>
+            <div className="field-grid">
+              <label className="field">
+                <span>Extension ID</span>
+                <input
+                  type="text"
+                  value={extensionId}
+                  onChange={(e) => setExtensionId(e.target.value)}
+                  placeholder="chrome://extensions → Ayrıntılar → ID"
+                  required
+                />
+                {extensionIdHint && (
+                  <p className="hint">{extensionIdHint}</p>
+                )}
+              </label>
+
+              <label className="field">
+                <span>LinkedIn Profil URL'si</span>
+                <input
+                  type="url"
+                  value={profileUrl}
+                  onChange={(e) => setProfileUrl(e.target.value)}
+                  placeholder="https://www.linkedin.com/in/username/"
+                  pattern="https://www.linkedin.com/in/.*"
+                  required
+                />
+              </label>
+            </div>
+
+            <button type="submit" disabled={isLoading}>
+              <span>{isLoading ? 'Yükleniyor...' : 'Profili Çek'}</span>
+            </button>
+          </form>
+
+          {status && (
+            <div className={`status ${statusType}`}>{status}</div>
+          )}
+
+          {result && (
+            <section className="result">
+              <div className="result-header">
+                <div>
+                  <p className="eyebrow">Sonuç</p>
+                  <h2>Profil Verisi</h2>
+                </div>
+                <span className="pill pill-success">Hazır</span>
+              </div>
+              <div className="json-viewer-root">
+                {ReactJson ? (
+                  <ReactJson
+                    src={result}
+                    theme="monokai"
+                    iconStyle="circle"
+                    indentWidth={2}
+                    collapsed={false}
+                    displayObjectSize={true}
+                    displayDataTypes={true}
+                    enableClipboard={true}
+                    quotesOnKeys={true}
+                    sortKeys={false}
+                  />
+                ) : (
+                  <pre>{JSON.stringify(result, null, 2)}</pre>
+                )}
+              </div>
+            </section>
+          )}
+        </section>
+
+        <section className="card info-card">
+          <h2>Kurulum Özet</h2>
+          <ol>
+            <li>
+              Eklentiyi <strong>chrome://extensions</strong> sayfasından
+              yükleyin.
+            </li>
+            <li>
+              Extension ID alanı otomatik gelir; farklıysa formdan güncelleyin.
+            </li>
+            <li>
+              Bu sayfayı <strong>http(s)://localhost</strong> altında açın (ör.{' '}
+              <code>npx serve web</code>).
+            </li>
+            <li>Tarayıcıda LinkedIn hesabınıza giriş yapın.</li>
+            <li>Her istek yeni sekmede profili açar ve veriyi bu sayfaya yollar.</li>
+          </ol>
+          <p className="hint">
+            Not: LinkedIn DOM yapısı sık değişebilir. Demo amaçlı temel alanlar
+            (isim, başlık, lokasyon ve ilk 5 deneyim) parse edilir.
+          </p>
+        </section>
+      </main>
+    </div>
+  );
 }
+
+// Render the app
+ReactDOM.render(<App />, document.getElementById('root'));

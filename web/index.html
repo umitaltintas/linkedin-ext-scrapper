@@ -7,68 +7,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="layout">
-      <section class="card">
-        <header>
-          <h1>LinkedIn Profili Çekme Demo</h1>
-          <p>Bu UI, Chrome eklentisi ile iletişim kurarak LinkedIn profilini istemci tarafında parse eder.</p>
-        </header>
-
-        <form id="scrape-form">
-          <label class="field">
-            <span>Extension ID</span>
-            <input
-              type="text"
-              name="extensionId"
-              id="extensionId"
-              placeholder="chrome://extensions → Ayrıntılar → ID"
-              required
-            />
-            <p class="hint" id="extensionIdHint"></p>
-          </label>
-
-          <label class="field">
-            <span>LinkedIn Profil URL'si</span>
-            <input
-              type="url"
-              name="profileUrl"
-              id="profileUrl"
-              placeholder="https://www.linkedin.com/in/username/"
-              pattern="https://www.linkedin.com/in/.*"
-              required
-            />
-          </label>
-
-          <button type="submit">Veriyi Getir</button>
-        </form>
-
-        <div class="status" id="status"></div>
-
-        <section class="result" id="result" hidden>
-          <h2>Profil Verisi</h2>
-          <pre id="resultPre"></pre>
-        </section>
-      </section>
-
-      <section class="card" id="debug-panel" hidden>
-        <h2>Debug Log</h2>
-        <div id="debugList" class="log-list"></div>
-      </section>
-
-      <section class="card">
-        <h2>Kurulum Özet</h2>
-        <ol>
-          <li>Eklentiyi <strong>chrome://extensions</strong> sayfasından yükleyin.</li>
-          <li>Eklenti ID'si artık otomatik doldurulur; farklı bir ID gerekiyorsa formdaki alanı güncelleyin.</li>
-          <li>Bu sayfayı <strong>http(s)://localhost</strong> altında çalıştırın (ör. <code>npx serve web</code>).</li>
-          <li>LinkedIn'e tarayıcıda giriş yapın.</li>
-          <li>Her yeni talep için LinkedIn profili arka planda açılacak ve sonuç burada görüntülenecek.</li>
-        </ol>
-        <p class="hint">
-          Not: LinkedIn DOM yapısı sık değişir. Demo amaçlı olarak sınırlı alanlar (isim, başlık, lokasyon, özet, ilk 5 deneyim) parse edilir.
-        </p>
-      </section>
-    </main>
+    <div id="root"></div>
 
     <template id="sample-json">
       {
@@ -88,6 +27,16 @@
       }
     </template>
 
-    <script src="app.js" defer></script>
+    <!-- React and ReactDOM from CDN -->
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel for JSX transpilation -->
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+
+    <!-- react-json-view from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/react-json-view@1.21.3/dist/main.js"></script>
+
+    <script type="text/babel" src="app.js"></script>
   </body>
 </html>

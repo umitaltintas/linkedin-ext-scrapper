@@ -245,9 +245,6 @@ if (!window.__linkedinScraperInjected) {
           )
         ) || null;
 
-      const logo =
-        item.querySelector('a[data-field="experience_company_logo"] img, a.pvs-entity__image-container img')
-          ?.src || null;
 
       const roleSkills = Array.from(
         item.querySelectorAll('[data-field="position_contextual_skills_see_details"] strong')
@@ -262,7 +259,6 @@ if (!window.__linkedinScraperInjected) {
         duration,
         location,
         description,
-        companyLogo: logo,
         roleSkills
       };
     });
@@ -327,10 +323,8 @@ if (!window.__linkedinScraperInjected) {
         item.querySelector('div.inline-show-more-text, .pvs-entity__description')
       );
 
-      const logo =
-        item.querySelector('a.pvs-entity__image-container--outline-offset img, a[href*="/school/"] img')?.src || null;
 
-      return { school, degree, field, dates, activities, description, logo };
+      return { school, degree, field, dates, activities, description };
     });
   }
 
@@ -469,11 +463,9 @@ if (!window.__linkedinScraperInjected) {
         (t) => t && !/endorse|onay/i.test(t) && !/linkedin skill|linkedin yetenek/i.test(t)
       );
 
-      const relatedLinks = Array.from(item.querySelectorAll('.pvs-entity__sub-components a')).map(
-        (a) => ({ href: a.href, label: textContent(a) })
-      );
+    
 
-      return { name, endorsements, assessmentPassed, insights, relatedLinks };
+      return { name, endorsements, assessmentPassed, insights };
     });
 
     const seen = new Set();
@@ -506,8 +498,7 @@ if (!window.__linkedinScraperInjected) {
           name,
           endorsements: endorsementCount,
           assessmentPassed: false,
-          insights: [],
-          relatedLinks: []
+          insights: []
         });
       });
 
