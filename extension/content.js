@@ -17,6 +17,9 @@ if (!window.__linkedinScraperInjected) {
   const AUTO_SCROLL_STEP_PX = 800;
   const AUTO_SCROLL_DELAY_MS = 100;
 
+  const STORAGE_KEY = '__linkedin_scraper_state_v2';
+  const SKILLS_PATH_SEGMENT = '/details/skills';
+
   const debugLogs = [];
 
   // ---------- utils ----------
@@ -54,6 +57,46 @@ if (!window.__linkedinScraperInjected) {
     } else {
       window.postMessage({ __linkedinScraper: true, ...payload }, '*');
     }
+  }
+
+  function savePendingState(data) {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (err) {
+      debugLog('state-save-error', { reason: err.message });
+    }
+  }
+
+  function loadPendingState() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      debugLog('state-load-error', { reason: err.message });
+      return null;
+    }
+  }
+
+  function clearPendingState() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      debugLog('state-clear-error', { reason: err.message });
+    }
+  }
+
+  function isSkillsPage() {
+    return window.location.pathname.includes(SKILLS_PATH_SEGMENT);
+  }
+
+  function buildSkillsUrl(profilePath) {
+    if (!profilePath) return null;
+    const trimmed = profilePath.replace(/\/$/, '');
+    const url = new URL(window.location.href);
+    url.pathname = `${trimmed}/details/skills/`;
+    url.search = '';
+    url.hash = '';
+    return url.toString();
   }
 
   function observeUntil(selector, timeout = OBSERVER_TIMEOUT_MS) {
@@ -292,15 +335,46 @@ if (!window.__linkedinScraperInjected) {
   }
 
   // ---------- skills ----------
+  function extractBaseProfilePath(pathname) {
+    if (!pathname) return null;
+    const match = pathname.match(/^\/in\/[^/]+/);
+    return match ? match[0] : null;
+  }
+
   function normalizeProfilePath(profileUrl) {
+    if (!profileUrl) return null;
     try {
       const url = new URL(profileUrl);
-      const base = url.pathname.split('/details/')[0];
-      return base.endsWith('/') ? base.slice(0, -1) : base;
+      const base = extractBaseProfilePath(url.pathname);
+      return base;
     } catch (e) {
       debugLog('skills-path-error', { reason: e.message });
       return null;
     }
+  }
+
+  function getCanonicalProfileUrl() {
+    const canonical =
+      document.querySelector('link[rel="canonical"]')?.href ||
+      document.querySelector('meta[property="og:url"]')?.content ||
+      null;
+    return canonical;
+  }
+
+  function determineProfileBasePath() {
+    const canonical = getCanonicalProfileUrl();
+    const fromCanonical = normalizeProfilePath(canonical);
+    if (fromCanonical) {
+      debugLog('profile-path-canonical', { path: fromCanonical, canonical });
+      return fromCanonical;
+    }
+    const fallback = normalizeProfilePath(window.location.href);
+    if (fallback) {
+      debugLog('profile-path-fallback', { path: fallback });
+      return fallback;
+    }
+    debugLog('profile-path-missing');
+    return null;
   }
 
   async function tryClickShowAllSkills() {
@@ -485,62 +559,143 @@ if (!window.__linkedinScraperInjected) {
   }
 
   // ---------- collector ----------
+  async function collectMainProfile() {
+    debugLog('collect-main-start', { href: location.href });
+
+    clearPendingState();
+
+    await observeUntil('main');
+    if (POST_MAIN_GRACE_MS) await delay(POST_MAIN_GRACE_MS);
+
+    await autoScrollPage();
+    await expandAllSeeMore();
+
+    await waitForSelectors(['main h1']);
+    await waitForAnySelector(['[data-view-name="profile-card"]:has(#experience) li'], WAIT_FOR_SECTIONS_MS);
+    await waitForAnySelector(['[data-view-name="profile-card"]:has(#education) li'], WAIT_FOR_SECTIONS_MS);
+    await waitForAnySelector(['[data-view-name="profile-card"]:has(#skills) li'], WAIT_FOR_SECTIONS_MS);
+
+    const name = queryText('main h1');
+    const headline = queryText('.text-body-medium.break-words') || null;
+    const locationTxt = queryText('span.text-body-small.inline.t-black--light.break-words') || null;
+
+    const aboutAnchor = document.querySelector('#about');
+    const aboutSection = aboutAnchor ? aboutAnchor.closest('section') : null;
+    const about = aboutSection
+      ? textContent(
+          aboutSection.querySelector('div.inline-show-more-text, div[data-test-id="about-section-show-more"]')
+        )
+      : null;
+
+    if (!name) throw new Error('LinkedIn DOM not ready yet');
+
+    const experiences = extractExperiences();
+    const education = extractEducation();
+
+    const partialProfile = {
+      name,
+      headline,
+      location: locationTxt,
+      about,
+      experiences,
+      education
+    };
+
+    debugLog('profile-main-ready', {
+      exps: experiences.length,
+      edus: education.length
+    });
+
+    const profilePath = determineProfileBasePath();
+    const skillsUrl = buildSkillsUrl(profilePath);
+
+    if (skillsUrl) {
+      debugLog('navigate-skills', { skillsUrl });
+      savePendingState({
+        phase: 'awaitSkills',
+        profileBasePath: profilePath,
+        skillsUrl,
+        partialProfile,
+        logs: debugLogs.slice()
+      });
+      window.location.href = skillsUrl;
+      return false;
+    }
+
+    debugLog('skills-navigation-unavailable');
+    const skills = await extractSkills(window.location.href);
+
+    debugLog('profile-ready', {
+      exps: experiences.length,
+      edus: education.length,
+      skills: skills.length
+    });
+
+    safeSendMessage({
+      action: 'profileScraped',
+      profile: { ...partialProfile, skills },
+      debugLogs
+    });
+
+    return true;
+  }
+
+  async function collectSkillsPhase() {
+    const pending = loadPendingState();
+    if (!pending || pending.phase !== 'awaitSkills') {
+      debugLog('skills-phase-no-state');
+      throw new Error('Skills page opened without pending state');
+    }
+
+    debugLog('collect-skills-start', { href: location.href });
+
+    await observeUntil('main');
+    if (POST_MAIN_GRACE_MS) await delay(POST_MAIN_GRACE_MS);
+    await autoScrollPage();
+    await expandAllSeeMore();
+    await waitForAnySelector(
+      ['[data-view-name="profile-component-entity"]', '.scaffold-finite-scroll__content li'],
+      WAIT_FOR_SECTIONS_MS + 3000
+    );
+
+    const parsed = parseSkillsFromDocument(document);
+    const skills = parsed.length ? parsed : parseInlineSkills(document);
+
+    debugLog('skills-phase-complete', { skills: skills.length });
+
+    const combinedLogs = [...(pending.logs || []), ...debugLogs];
+    const profile = { ...(pending.partialProfile || {}), skills };
+
+    clearPendingState();
+
+    safeSendMessage({
+      action: 'profileScraped',
+      profile,
+      debugLogs: combinedLogs
+    });
+  }
+
   async function collectProfile() {
     try {
-      debugLog('collect-start', { href: location.href });
-      await observeUntil('main');
-      if (POST_MAIN_GRACE_MS) await delay(POST_MAIN_GRACE_MS);
+      if (isSkillsPage()) {
+        await collectSkillsPhase();
+        return;
+      }
 
-      await autoScrollPage();
-      await expandAllSeeMore();
-      
-      await waitForSelectors(['main h1']);
-      await waitForAnySelector(['[data-view-name="profile-card"]:has(#experience) li'], WAIT_FOR_SECTIONS_MS);
-      await waitForAnySelector(['[data-view-name="profile-card"]:has(#education) li'], WAIT_FOR_SECTIONS_MS);
-      await waitForAnySelector(['[data-view-name="profile-card"]:has(#skills) li'], WAIT_FOR_SECTIONS_MS);
-
-      const name = queryText('main h1');
-      const headline =
-        queryText('.text-body-medium.break-words') || null;
-      const locationTxt =
-        queryText('span.text-body-small.inline.t-black--light.break-words') || null;
-      
-      const aboutAnchor = document.querySelector('#about');
-      const aboutSection = aboutAnchor ? aboutAnchor.closest('section') : null;
-      const about = aboutSection ? textContent(aboutSection.querySelector('div.inline-show-more-text, div[data-test-id="about-section-show-more"]')) : null;
-
-      const experiences = extractExperiences();
-      const education = extractEducation();
-      const skills = await extractSkills(window.location.href);
-
-      if (!name) throw new Error('LinkedIn DOM not ready yet');
-
-      debugLog('profile-ready', {
-        name: !!name,
-        exps: experiences.length,
-        edus: education.length,
-        skills: skills.length
-      });
-
-      safeSendMessage({
-        action: 'profileScraped',
-        profile: {
-          name,
-          headline,
-          location: locationTxt,
-          about,
-          experiences,
-          education,
-          skills
-        },
-        debugLogs
-      });
+      const delivered = await collectMainProfile();
+      if (!delivered) {
+        // Navigation to skills page initiated; response will be sent in the next phase.
+        return;
+      }
     } catch (error) {
       debugLog('profile-error', { reason: error.message || 'Unknown error', stack: error.stack });
+      const pending = loadPendingState();
+      const combinedLogs = pending?.logs ? [...pending.logs, ...debugLogs] : debugLogs;
+      clearPendingState();
       safeSendMessage({
         action: 'profileError',
         reason: error.message || 'Unknown error',
-        debugLogs
+        debugLogs: combinedLogs
       });
     }
   }
@@ -573,15 +728,6 @@ if (!window.__linkedinScraperInjected) {
 
   // boot
   (function boot() {
-    // Eğer yetenekler detay sayfasındaysak, sadece yetenekleri parse edip çıkalım.
-    // Bu, script'in `fetch` ile bu sayfayı çağırdığı durumlar için bir kilitlenmeyi önler.
-    if (window.location.pathname.includes('/details/skills')) {
-      debugLog('skills-detail-page-direct-load');
-      // Bu senaryo genellikle fetch içinde çalışır, bu yüzden doğrudan bir işlem yapmaya gerek yok.
-      // Kullanıcı bu sayfayı manuel olarak açarsa, tam bir profil toplama tetiklenmemeli.
-      return; 
-    }
-
     debugLog('content-script-init', { href: window.location.href });
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
       collectProfile();
