@@ -1,4 +1,5 @@
 // linkedin profile scraper – resilient SPA/lazy-load aware
+// GÜNCELLENMİŞ VERSİYON
 if (!window.__linkedinScraperInjected) {
   window.__linkedinScraperInjected = true;
 
@@ -6,15 +7,15 @@ if (!window.__linkedinScraperInjected) {
   const MAX_SKILLS = 15;
   const MAX_EDUCATION = 4;
 
- // Timings (faster)
-const OBSERVER_TIMEOUT_MS    = 6000;   // 12s → 6s
-const WAIT_FOR_SECTIONS_MS   = 12000;  // 20s → 12s
-const WAIT_POLL_INTERVAL_MS  = 250;    // 350ms → 250ms
-const POST_MAIN_GRACE_MS     = 400;    // 1000ms → 400ms
+  // Timings (faster)
+  const OBSERVER_TIMEOUT_MS = 6000;
+  const WAIT_FOR_SECTIONS_MS = 12000;
+  const WAIT_POLL_INTERVAL_MS = 250;
+  const POST_MAIN_GRACE_MS = 400;
 
-const AUTO_SCROLL_STEPS      = 10;     // 18 → 10
-const AUTO_SCROLL_STEP_PX    = 800;    // 900 → 800
-const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
+  const AUTO_SCROLL_STEPS = 10;
+  const AUTO_SCROLL_STEP_PX = 800;
+  const AUTO_SCROLL_DELAY_MS = 100;
 
   const debugLogs = [];
 
@@ -38,7 +39,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
     debugLogs.push(entry);
     try {
       console.debug?.('[linkedin-scraper]', step, entry.meta ?? '');
-    } catch {}
+    } catch { }
   }
 
   const textContent = (el) =>
@@ -109,7 +110,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   }
 
   function clickAllButtonsLike(patterns) {
-    const btns = Array.from(document.querySelectorAll('button, a[role="button"]'));
+    const btns = Array.from(document.querySelectorAll('button, a[role="button"], a.artdeco-button'));
     let count = 0;
     btns.forEach((b) => {
       const label = (b.innerText || b.getAttribute('aria-label') || '').toLowerCase();
@@ -124,8 +125,10 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   async function expandAllSeeMore() {
     // multi-lingual matches (en/tr + loose)
     const patterns = [
-      /see more|show more|show all|open full text/i,
-      /daha fazla|tümünü gör|devamını oku/i
+      /see more|show more|open full text/i,
+      /daha fazla gör|devamını oku/i,
+       // "show all X experiences" gibi kalıpları da yakalamak için daha esnek bir yapı
+      /(tümünü göster|show all)/i
     ];
     let rounds = 0;
     while (rounds < 3) {
@@ -139,15 +142,12 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
 
   // ---------- sections: experience / education ----------
   function extractExperiences() {
-    // Section roots
-    const section =
-      document.querySelector('section#experience') ||
-      document.querySelector('section[data-view-name="profile-component-EXPERIENCE"]') ||
-      document.querySelector('[data-test-id="experience"]') ||
-      document.querySelector('#experience + div');
+    // GÜNCELLENDİ: Bölüm artık `id`'ye sahip bir `div`'i içeren `section`'dan bulunuyor.
+    const anchor = document.querySelector('#experience');
+    const section = anchor ? anchor.closest('section') : null;
 
     if (!section) return [];
-
+    
     // item nodes (new & old)
     const items =
       Array.from(section.querySelectorAll('[data-view-name="profile-component-entity"]')) ||
@@ -197,16 +197,10 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
       )
         .map(textContent)
         .filter(Boolean);
-      if (metaRows.length > 1) {
-        location = metaRows.find((r) => r !== duration) || metaRows[1];
-      } else {
-        location =
-          textContent(
-            item.querySelector(
-              '[data-field="positionLocation"] span[aria-hidden="true"], .pv-entity__location span:nth-child(2)'
-            )
-          ) || null;
-      }
+
+      // Lokasyon genellikle duration'dan farklı olan ikinci meta satırıdır.
+      const potentialLocations = metaRows.filter(r => r !== duration && !r.includes('ay') && !r.includes('yıl') && !r.includes('mo') && !r.includes('yr'));
+      location = potentialLocations[0] || null;
 
       const description =
         textContent(
@@ -241,10 +235,9 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   }
 
   function extractEducation() {
-    const section =
-      document.querySelector('section#education') ||
-      document.querySelector('section[data-view-name="profile-component-EDUCATION"]') ||
-      document.querySelector('[data-test-id="education"]');
+    // GÜNCELLENDİ: Bölüm artık `id`'ye sahip bir `div`'i içeren `section`'dan bulunuyor.
+    const anchor = document.querySelector('#education');
+    const section = anchor ? anchor.closest('section') : null;
 
     if (!section) return [];
 
@@ -300,7 +293,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
       );
 
       const logo =
-        item.querySelector('a.pvs-entity__image-container--outline-offset img')?.src || null;
+        item.querySelector('a.pvs-entity__image-container--outline-offset img, a[href*="/school/"] img')?.src || null;
 
       return { school, degree, field, dates, activities, description, logo };
     });
@@ -319,19 +312,17 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   }
 
   async function tryClickShowAllSkills() {
-    // LinkedIn bazen "Show all skills" linki veriyor; onu tıklayıp DOM’dan okumak daha stabil.
     const triggers = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+    // GÜNCELLENDİ: Regex, "17 yeteneğin tümünü göster" gibi dinamik sayıları da yakalayacak şekilde güncellendi.
     const hit = triggers.find((el) => {
       const t = (el.innerText || el.getAttribute('aria-label') || '').toLowerCase();
-      return /show all skills|see all skills|tüm becerileri gör|becerilerin tümünü gör/i.test(t);
+      return /(show all|see all|tümünü göster) \d* (skills|yeteneğin|yetenek)/i.test(t);
     });
     if (hit) {
       hit.click();
       debugLog('skills-show-all-clicked');
-      // küçük bir bekleme + scroll
       await delay(600);
       await autoScrollPage();
-      // detay sayfasında entity’leri bekle
       await waitForAnySelector(
         ['[data-view-name="profile-component-entity"]', 'li.pvs-list__item'],
         8000
@@ -407,7 +398,6 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
       return { name, endorsements, assessmentPassed, insights, relatedLinks };
     });
 
-    // dedupe + truncate
     const seen = new Set();
     const out = [];
     for (const s of skills) {
@@ -421,27 +411,19 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   }
 
   function parseInlineSkills(root) {
-    const sections = [
-      root.querySelector('section#skills'),
-      root.querySelector('section[data-view-name="profile-component-SKILLS"]'),
-      root.querySelector('.pv-skill-categories-section')
-    ].filter(Boolean);
-
-    if (!sections.length) return [];
+    // GÜNCELLENDİ: Bölüm seçicisi düzeltildi.
+    const anchor = root.querySelector('#skills');
+    const section = anchor ? anchor.closest('section') : null;
+    
+    if (!section) return [];
 
     const collected = [];
-    sections.forEach((section) => {
-      section.querySelectorAll('li').forEach((item) => {
+    section.querySelectorAll('li [data-view-name="profile-component-entity"]').forEach((item) => {
         const name =
-          textContent(item.querySelector('span.mr1 span[aria-hidden="true"]')) ||
-          textContent(item.querySelector('span.pv-skill-category-entity__name-text')) ||
           textContent(item.querySelector('.t-bold span[aria-hidden="true"]'));
         if (!name) return;
 
-        const endorsementCount =
-          textContent(
-            item.querySelector('.pv-skill-entity__endorsement-count, .t-12.t-black--light')
-          ) || null;
+        const endorsementCount = null; // Bu yeni UI'da doğrudan görünmüyor.
 
         collected.push({
           name,
@@ -451,9 +433,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
           relatedLinks: []
         });
       });
-    });
 
-    // dedupe
     const seen = new Set();
     const out = [];
     for (const s of collected) {
@@ -468,7 +448,6 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
   }
 
   async function extractSkills(profileUrl) {
-    // 1) sayfada “show all skills” varsa onu kullan
     try {
       const maybeDoc = await tryClickShowAllSkills();
       if (maybeDoc) {
@@ -482,7 +461,6 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
       debugLog('skills-show-all-error', { reason: e.message });
     }
 
-    // 2) fetch ile /details/skills/
     try {
       const doc = await fetchSkillsDocument(profileUrl);
       const parsed = parseSkillsFromDocument(doc);
@@ -494,8 +472,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
     } catch (e) {
       debugLog('skills-fetch-fallback', { reason: e.message });
     }
-
-    // 3) inline fallback
+    
     const inline = parseInlineSkills(document);
     debugLog('skills-inline-used', { count: inline.length });
     return inline;
@@ -508,50 +485,40 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
       await observeUntil('main');
       if (POST_MAIN_GRACE_MS) await delay(POST_MAIN_GRACE_MS);
 
-      // ön hazırlık: auto scroll + tüm "see more"ları aç
       await autoScrollPage();
       await expandAllSeeMore();
-
-      // temel başlık + bölümler hazır mı?
+      
       await waitForSelectors(['main h1']);
+      // GÜNCELLENDİ: Bekleme seçicileri yeni yapıya uyarlandı.
       await waitForAnySelector(
         [
-          'section#experience li',
-          'section[data-view-name="profile-component-EXPERIENCE"] [data-view-name="profile-component-entity"]',
-          '[data-test-id="experience"] li'
+          '[data-view-name="profile-card"]:has(#experience) li',
         ],
         WAIT_FOR_SECTIONS_MS
       );
       await waitForAnySelector(
         [
-          'section#education li',
-          'section[data-view-name="profile-component-EDUCATION"] [data-view-name="profile-component-entity"]',
-          '[data-test-id="education"] li'
+          '[data-view-name="profile-card"]:has(#education) li',
         ],
         WAIT_FOR_SECTIONS_MS
       );
       await waitForAnySelector(
         [
-          'section#skills li',
-          'section[data-view-name="profile-component-SKILLS"] li',
-          '.pv-skill-categories-section li'
+          '[data-view-name="profile-card"]:has(#skills) li',
         ],
         WAIT_FOR_SECTIONS_MS
       );
 
       const name = queryText('main h1');
       const headline =
-        queryText('.pv-text-details__left-panel .text-body-medium, .text-body-medium.break-words') ||
-        null;
+        queryText('.text-body-medium.break-words') || null;
+      // GÜNCELLENDİ: Lokasyon seçicisi daha spesifik hale getirildi.
       const locationTxt =
-        queryText('.pv-text-details__left-panel .text-body-small, .inline.t-black--light.break-words') ||
-        null;
-      const about =
-        textContent(
-          document.querySelector(
-            'section#about div.inline-show-more-text, section[data-view-name="profile-component-ABOUT"] div'
-          )
-        ) || null;
+        queryText('span.text-body-small.inline.t-black--light.break-words') || null;
+      
+      const aboutAnchor = document.querySelector('#about');
+      const aboutSection = aboutAnchor ? aboutAnchor.closest('section') : null;
+      const about = aboutSection ? textContent(aboutSection.querySelector('div.inline-show-more-text, div[data-test-id="about-section-show-more"]')) : null;
 
       const experiences = extractExperiences();
       const education = extractEducation();
@@ -580,7 +547,7 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
         debugLogs
       });
     } catch (error) {
-      debugLog('profile-error', { reason: error.message || 'Unknown error' });
+      debugLog('profile-error', { reason: error.message || 'Unknown error', stack: error.stack });
       safeSendMessage({
         action: 'profileError',
         reason: error.message || 'Unknown error',
@@ -601,7 +568,6 @@ const AUTO_SCROLL_DELAY_MS   = 100;    // 160ms → 100ms
         const now = location.href;
         if (prev !== now) {
           debugLog('spa-route-change', { from: prev, to: now });
-          // küçük bir gecikme: yeni DOM mount olsun
           setTimeout(run, 800);
         }
         return res;
