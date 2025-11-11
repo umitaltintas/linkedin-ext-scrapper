@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn Relay Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="card">
+        <header>
+          <h1>LinkedIn Profili Çekme Demo</h1>
+          <p>Bu UI, Chrome eklentisi ile iletişim kurarak LinkedIn profilini istemci tarafında parse eder.</p>
+        </header>
+
+        <form id="scrape-form">
+          <label class="field">
+            <span>Extension ID</span>
+            <input
+              type="text"
+              name="extensionId"
+              id="extensionId"
+              placeholder="chrome://extensions → Ayrıntılar → ID"
+              required
+            />
+          </label>
+
+          <label class="field">
+            <span>LinkedIn Profil URL'si</span>
+            <input
+              type="url"
+              name="profileUrl"
+              id="profileUrl"
+              placeholder="https://www.linkedin.com/in/username/"
+              pattern="https://www.linkedin.com/in/.*"
+              required
+            />
+          </label>
+
+          <button type="submit">Veriyi Getir</button>
+        </form>
+
+        <div class="status" id="status"></div>
+
+        <section class="result" id="result" hidden>
+          <h2>Profil Verisi</h2>
+          <pre id="resultPre"></pre>
+        </section>
+      </section>
+
+      <section class="card" id="debug-panel" hidden>
+        <h2>Debug Log</h2>
+        <div id="debugList" class="log-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>Kurulum Özet</h2>
+        <ol>
+          <li>Eklentiyi <strong>chrome://extensions</strong> sayfasından yükleyin.</li>
+          <li>Eklenti ID'sini kopyalayın ve yukarıdaki alana yapıştırın.</li>
+          <li>Bu sayfayı <strong>http(s)://localhost</strong> altında çalıştırın (ör. <code>npx serve web</code>).</li>
+          <li>LinkedIn'e tarayıcıda giriş yapın.</li>
+          <li>Her yeni talep için LinkedIn profili arka planda açılacak ve sonuç burada görüntülenecek.</li>
+        </ol>
+        <p class="hint">
+          Not: LinkedIn DOM yapısı sık değişir. Demo amaçlı olarak sınırlı alanlar (isim, başlık, lokasyon, özet, ilk 5 deneyim) parse edilir.
+        </p>
+      </section>
+    </main>
+
+    <template id="sample-json">
+      {
+        "name": "Ada Lovelace",
+        "headline": "Yapay Zeka Araştırmacısı",
+        "location": "İstanbul, TR",
+        "about": "Öncü mühendis. Matematik ve dağıtık sistemler meraklısı.",
+        "experiences": [
+          {
+            "title": "CTO",
+            "company": "FutureAI",
+            "duration": "2021 - Günümüz",
+            "location": "Remote",
+            "description": "Ürün ve platform ekiplerini yönetiyorum."
+          }
+        ]
+      }
+    </template>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

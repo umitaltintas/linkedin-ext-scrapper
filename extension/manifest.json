@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Relay Demo",
+  "description": "Demo extension that relays LinkedIn profile data to an authorized HR web app.",
+  "version": "0.1.0",
+  "permissions": ["tabs"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/in/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://localhost/*",
+      "http://localhost/*",
+      "http://localhost:*/*",
+      "https://*.hr-demo.local/*"
+    ]
+  }
+}
