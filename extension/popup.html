@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LinkedIn Relay ID</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <h1>LinkedIn Relay</h1>
+        <p class="subtitle">Bu eklenti ID'sini HR paneline girmeniz yeterli.</p>
+      </header>
+
+      <section class="id-block">
+        <label for="extensionId">Extension ID</label>
+        <div class="id-row">
+          <input id="extensionId" type="text" readonly />
+          <button id="copyBtn" type="button">Kopyala</button>
+        </div>
+        <p id="copyStatus" class="status"></p>
+      </section>
+
+      <section class="instructions">
+        <p>
+          1. <strong>http://localhost</strong> üzerindeki web arayüzünü açın.<br />
+          2. Bu ID otomatik olarak dolacaktır; gerekirse buradan kopyalayabilirsiniz.
+        </p>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "permissions": ["tabs"],
   "host_permissions": ["https://www.linkedin.com/*"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5TDyQmFQMtnF4eHq7p19ISIcYv8I5TN1Tt91MxQIhkgyuKawCPciB/eOmIUOcs3Fxs8/aeV4nGVIEUNonWJaeQe0ywbDugHaHUQ6cH5RgHPsUPOmTQfXdYZsb9n484InDDnTMIXmRKqzx7V0cHY+Pna643d1YOv/xBXQV34XImDHdN4EmZyNW1+LfLsh70YFe0gB1V4ijTQ2ZhhxUTfn+aDkJalWoMvzvPxat7rSEMhO+T5h81plAXr4Vln4R5L+24T5dkVUu1LoVQk0ZPVJU16g9B6we5P6JEuUllCtThmZOuprQ7XPCqKxU3mfg3+HHt9JvnklLk2kNJwPDLXKEQIDAQAB",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LinkedIn Relay Demo"
+  },
   "background": {
     "service_worker": "background.js"
   },

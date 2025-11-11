@@ -3,22 +3,36 @@ const statusEl = document.getElementById('status');
 const resultSection = document.getElementById('result');
 const resultPre = document.getElementById('resultPre');
 const extensionIdInput = document.getElementById('extensionId');
+const extensionIdHint = document.getElementById('extensionIdHint');
 const profileUrlInput = document.getElementById('profileUrl');
 const debugPanel = document.getElementById('debug-panel');
 const debugList = document.getElementById('debugList');
 const sampleProfile = JSON.parse(document.getElementById('sample-json').innerHTML.trim());
+const DEFAULT_EXTENSION_ID = 'hnfkpaaphfmbhcaedaejaanfjcghppan';
 const canTalkToExtension = typeof chrome !== 'undefined' && !!chrome.runtime?.sendMessage;
 const queryParams = new URLSearchParams(window.location.search);
 const debugAlwaysOn = queryParams.get('debug') === '1';
 
+function updateExtensionIdHint(source) {
+  if (!extensionIdHint) return;
+  const messages = {
+    query: 'Extension ID URL parametresinden alındı.',
+    storage: 'Extension ID daha önce kaydettiğiniz değerle dolduruldu.',
+    default: `Extension ID otomatik olarak ${DEFAULT_EXTENSION_ID} değerine ayarlandı.`
+  };
+  extensionIdHint.textContent = messages[source] || '';
+}
+
 (function hydrateExtensionInput() {
   const fromQuery = queryParams.get('ext');
   const fromStorage = localStorage.getItem('extensionId');
-  if (fromQuery) {
-    extensionIdInput.value = fromQuery;
-  } else if (fromStorage) {
-    extensionIdInput.value = fromStorage;
+  const resolved = fromQuery || fromStorage || DEFAULT_EXTENSION_ID;
+  extensionIdInput.value = resolved;
+  if (!fromQuery && !fromStorage) {
+    localStorage.setItem('extensionId', resolved);
   }
+  const source = fromQuery ? 'query' : fromStorage ? 'storage' : 'default';
+  updateExtensionIdHint(source);
 })();
 
 function setStatus(message, type) {
