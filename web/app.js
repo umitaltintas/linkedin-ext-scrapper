@@ -124,8 +124,7 @@ function App() {
         <h1>LinkedIn Profili Çekme</h1>
         <p>
           Chrome eklentisi ile konuşarak LinkedIn profilini otomatik açar ve
-          veriyi bu sayfada gösterir. Debug ekranı kaldırıldı; artık odak sadece
-          profile verisinde.
+          veriyi bu sayfada gösterir.
         </p>
         <div className="hero-meta">
           <span className="pill">Canlı Demo</span>
