@@ -1,5 +1,5 @@
 // linkedin profile scraper – resilient SPA/lazy-load aware
-// GÜNCELLENMİŞ VERSİYON
+// GÜNCELLENMİŞ VERSİYON (Yetenekler sayfası HTML'i ile uyumlu)
 if (!window.__linkedinScraperInjected) {
   window.__linkedinScraperInjected = true;
 
@@ -123,11 +123,9 @@ if (!window.__linkedinScraperInjected) {
   }
 
   async function expandAllSeeMore() {
-    // multi-lingual matches (en/tr + loose)
     const patterns = [
       /see more|show more|open full text/i,
       /daha fazla gör|devamını oku/i,
-       // "show all X experiences" gibi kalıpları da yakalamak için daha esnek bir yapı
       /(tümünü göster|show all)/i
     ];
     let rounds = 0;
@@ -142,13 +140,11 @@ if (!window.__linkedinScraperInjected) {
 
   // ---------- sections: experience / education ----------
   function extractExperiences() {
-    // GÜNCELLENDİ: Bölüm artık `id`'ye sahip bir `div`'i içeren `section`'dan bulunuyor.
     const anchor = document.querySelector('#experience');
     const section = anchor ? anchor.closest('section') : null;
 
     if (!section) return [];
     
-    // item nodes (new & old)
     const items =
       Array.from(section.querySelectorAll('[data-view-name="profile-component-entity"]')) ||
       [];
@@ -167,7 +163,6 @@ if (!window.__linkedinScraperInjected) {
           )
         ) || queryText('[data-field="experience_title"]', item);
 
-      // company + employment type often appear on one line: "Company · Full-time"
       const companyLine =
         textContent(
           item.querySelector(
@@ -190,7 +185,6 @@ if (!window.__linkedinScraperInjected) {
           )
         ) || null;
 
-      // Location can be on a separate muted row
       let location = null;
       const metaRows = Array.from(
         item.querySelectorAll('span.t-14.t-normal.t-black--light, .pv-entity__location span:nth-child(2)')
@@ -198,7 +192,6 @@ if (!window.__linkedinScraperInjected) {
         .map(textContent)
         .filter(Boolean);
 
-      // Lokasyon genellikle duration'dan farklı olan ikinci meta satırıdır.
       const potentialLocations = metaRows.filter(r => r !== duration && !r.includes('ay') && !r.includes('yıl') && !r.includes('mo') && !r.includes('yr'));
       location = potentialLocations[0] || null;
 
@@ -235,7 +228,6 @@ if (!window.__linkedinScraperInjected) {
   }
 
   function extractEducation() {
-    // GÜNCELLENDİ: Bölüm artık `id`'ye sahip bir `div`'i içeren `section`'dan bulunuyor.
     const anchor = document.querySelector('#education');
     const section = anchor ? anchor.closest('section') : null;
 
@@ -313,7 +305,6 @@ if (!window.__linkedinScraperInjected) {
 
   async function tryClickShowAllSkills() {
     const triggers = Array.from(document.querySelectorAll('a, button, [role="button"]'));
-    // GÜNCELLENDİ: Regex, "17 yeteneğin tümünü göster" gibi dinamik sayıları da yakalayacak şekilde güncellendi.
     const hit = triggers.find((el) => {
       const t = (el.innerText || el.getAttribute('aria-label') || '').toLowerCase();
       return /(show all|see all|tümünü göster) \d* (skills|yeteneğin|yetenek)/i.test(t);
@@ -327,6 +318,8 @@ if (!window.__linkedinScraperInjected) {
         ['[data-view-name="profile-component-entity"]', 'li.pvs-list__item'],
         8000
       );
+      // "Tümünü göster" bir modal açmak yerine yeni bir sayfaya yönlendirebilir.
+      // Bu durumda, güncel `document` nesnesini döndürmek yeterlidir.
       return document;
     }
     return null;
@@ -359,6 +352,12 @@ if (!window.__linkedinScraperInjected) {
     return parser.parseFromString(html, 'text/html');
   }
 
+  /**
+   * Bu fonksiyon, hem `fetch` ile çekilen `/details/skills` sayfasının HTML'ini
+   * hem de "Tümünü göster" butonuna tıklandıktan sonra açılan sayfanın DOM'unu ayrıştırabilir.
+   * Yapı, `data-view-name="profile-component-entity"` ve `.pvs-entity__sub-components` gibi
+   * anahtar sınıflara dayandığı için dayanıklıdır.
+   */
   function parseSkillsFromDocument(doc) {
     const entities = Array.from(
       doc.querySelectorAll('[data-view-name="profile-component-entity"]')
@@ -366,6 +365,7 @@ if (!window.__linkedinScraperInjected) {
     if (!entities.length) return [];
 
     const skills = entities.map((item) => {
+      // Yetenek adı
       const name =
         textContent(
           item.querySelector(
@@ -373,20 +373,24 @@ if (!window.__linkedinScraperInjected) {
           )
         ) || null;
 
+      // Yetenekle ilgili detaylar (onaylar, değerlendirmeler, deneyimler)
       const detailItems = Array.from(item.querySelectorAll('.pvs-entity__sub-components li'));
       const detailTexts = detailItems.map(textContent).filter(Boolean);
 
+      // Onay (endorsement) sayısını bul ve ayıkla
       const endorsementsEntry = detailTexts.find((t) => /endorse|onay/i.test(t || ''));
       let endorsements = null;
       if (endorsementsEntry) {
         const digits = endorsementsEntry.replace(/[^0-9]/g, '');
         endorsements = digits ? Number(digits) : endorsementsEntry;
       }
-
+      
+      // Yetenek değerlendirmesini geçip geçmediğini kontrol et
       const assessmentPassed = detailTexts.some((t) =>
         /linkedin skill|linkedin yetenek/i.test(t || '')
       );
-
+      
+      // Diğer bilgileri (örneğin, "2 deneyim...") insight olarak kaydet
       const insights = detailTexts.filter(
         (t) => t && !/endorse|onay/i.test(t) && !/linkedin skill|linkedin yetenek/i.test(t)
       );
@@ -411,7 +415,6 @@ if (!window.__linkedinScraperInjected) {
   }
 
   function parseInlineSkills(root) {
-    // GÜNCELLENDİ: Bölüm seçicisi düzeltildi.
     const anchor = root.querySelector('#skills');
     const section = anchor ? anchor.closest('section') : null;
     
@@ -423,7 +426,7 @@ if (!window.__linkedinScraperInjected) {
           textContent(item.querySelector('.t-bold span[aria-hidden="true"]'));
         if (!name) return;
 
-        const endorsementCount = null; // Bu yeni UI'da doğrudan görünmüyor.
+        const endorsementCount = null; // Bu UI'da doğrudan görünmüyor.
 
         collected.push({
           name,
@@ -448,6 +451,7 @@ if (!window.__linkedinScraperInjected) {
   }
 
   async function extractSkills(profileUrl) {
+    // 1. "Tümünü göster" butonuna tıkla ve açılan sayfayı/modalı kullan
     try {
       const maybeDoc = await tryClickShowAllSkills();
       if (maybeDoc) {
@@ -461,6 +465,7 @@ if (!window.__linkedinScraperInjected) {
       debugLog('skills-show-all-error', { reason: e.message });
     }
 
+    // 2. /details/skills sayfasını fetch ile çek
     try {
       const doc = await fetchSkillsDocument(profileUrl);
       const parsed = parseSkillsFromDocument(doc);
@@ -473,6 +478,7 @@ if (!window.__linkedinScraperInjected) {
       debugLog('skills-fetch-fallback', { reason: e.message });
     }
     
+    // 3. Son çare olarak ana profildeki inline yetenekleri al
     const inline = parseInlineSkills(document);
     debugLog('skills-inline-used', { count: inline.length });
     return inline;
@@ -489,30 +495,13 @@ if (!window.__linkedinScraperInjected) {
       await expandAllSeeMore();
       
       await waitForSelectors(['main h1']);
-      // GÜNCELLENDİ: Bekleme seçicileri yeni yapıya uyarlandı.
-      await waitForAnySelector(
-        [
-          '[data-view-name="profile-card"]:has(#experience) li',
-        ],
-        WAIT_FOR_SECTIONS_MS
-      );
-      await waitForAnySelector(
-        [
-          '[data-view-name="profile-card"]:has(#education) li',
-        ],
-        WAIT_FOR_SECTIONS_MS
-      );
-      await waitForAnySelector(
-        [
-          '[data-view-name="profile-card"]:has(#skills) li',
-        ],
-        WAIT_FOR_SECTIONS_MS
-      );
+      await waitForAnySelector(['[data-view-name="profile-card"]:has(#experience) li'], WAIT_FOR_SECTIONS_MS);
+      await waitForAnySelector(['[data-view-name="profile-card"]:has(#education) li'], WAIT_FOR_SECTIONS_MS);
+      await waitForAnySelector(['[data-view-name="profile-card"]:has(#skills) li'], WAIT_FOR_SECTIONS_MS);
 
       const name = queryText('main h1');
       const headline =
         queryText('.text-body-medium.break-words') || null;
-      // GÜNCELLENDİ: Lokasyon seçicisi daha spesifik hale getirildi.
       const locationTxt =
         queryText('span.text-body-small.inline.t-black--light.break-words') || null;
       
@@ -584,6 +573,15 @@ if (!window.__linkedinScraperInjected) {
 
   // boot
   (function boot() {
+    // Eğer yetenekler detay sayfasındaysak, sadece yetenekleri parse edip çıkalım.
+    // Bu, script'in `fetch` ile bu sayfayı çağırdığı durumlar için bir kilitlenmeyi önler.
+    if (window.location.pathname.includes('/details/skills')) {
+      debugLog('skills-detail-page-direct-load');
+      // Bu senaryo genellikle fetch içinde çalışır, bu yüzden doğrudan bir işlem yapmaya gerek yok.
+      // Kullanıcı bu sayfayı manuel olarak açarsa, tam bir profil toplama tetiklenmemeli.
+      return; 
+    }
+
     debugLog('content-script-init', { href: window.location.href });
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
       collectProfile();
