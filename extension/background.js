@@ -1,4 +1,4 @@
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 45000;
 
 /**
  * pendingRequests maps tabId -> { sendResponse, timer }
